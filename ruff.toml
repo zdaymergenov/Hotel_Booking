@@ -1,4 +1,4 @@
 target-version = "py311"
 select = ["E", "F", "W", "I"]
 ignore = []
-line-length = 88
+line-length = 100
