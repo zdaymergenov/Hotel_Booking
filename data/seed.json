@@ -1,0 +1,18 @@
+{
+  "hotels": [
+    {"id": "h1", "name": "City Hotel", "stars": 3, "city": "Алматы", "features": ["wifi", "parking"]},
+    {"id": "h2", "name": "Beach Resort", "stars": 4, "city": "Астана", "features": ["spa", "pool"]}
+  ],
+  "room_types": [
+    {"id": "r1", "hotel_id": "h1", "name": "Standard", "capacity": 2, "beds": ["queen"], "features": ["ac"]},
+    {"id": "r2", "hotel_id": "h2", "name": "Family", "capacity": 4, "beds": ["queen", "twin"], "features": ["balcony"]}
+  ],
+  "rates": [
+    {"id": "rp1", "hotel_id": "h1", "room_type_id": "r1", "title": "BAR", "meal": "RO", "refundable": true, "cancel_before_days": 3},
+    {"id": "rp2", "hotel_id": "h2", "room_type_id": "r2", "title": "BAR", "meal": "BB", "refundable": false, "cancel_before_days": null}
+  ],
+  "prices": [
+    {"id": "p1", "rate_id": "rp1", "date": "2025-10-01", "amount": 25000, "currency": "KZT"},
+    {"id": "p2", "rate_id": "rp2", "date": "2025-10-01", "amount": 48000, "currency": "KZT"}
+  ]
+}
