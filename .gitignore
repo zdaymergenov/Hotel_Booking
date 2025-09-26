@@ -1,55 +1,43 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Virtual environment
+# ========================
+# Python virtual environments
 .venv/
 venv/
-ENV/
 env/
 
-# Distribution / packaging
-build/
-develop-eggs/
-dist/
-eggs/
-.eggs/
-*.egg-info/
-.installed.cfg
-*.egg
+# Python cache/compiled files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
 
-# PyInstaller
-*.manifest
-*.spec
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
+# ========================
+# Tool caches
+.ruff_cache/
 .pytest_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
 
-# IDE settings
+# Streamlit cache & configs
+.streamlit/
+
+# ========================
+# Logs and databases
+*.log
+*.sqlite3
+
+# ========================
+# IDE / Editor settings
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# Jupyter Notebook
-.ipynb_checkpoints
+# Jupyter notebooks
+.ipynb_checkpoints/
 
-# macOS / Windows
+# System files
 .DS_Store
 Thumbs.db
-
-__pycache__/
-*.pyc
-*.pyo
