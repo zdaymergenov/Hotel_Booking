@@ -1,176 +1,99 @@
-import json
-from pathlib import Path
-from types import SimpleNamespace
-
 import streamlit as st
+from statistics import mean
 
-from core.transforms import (
-    by_capacity,
-    by_city,
-    by_features,
-    by_price_range,
-    combine_all,
-    filter_offers,
-)
+from core.transforms import load_seed, nightly_sum, filter_offers, combine_all, by_city, by_capacity, by_price_range
+from core.domain import Offer, Hotel, RoomType, RatePlan, Price  # добавили Offer
 
+st.set_page_config(page_title="Hotel Booking — Overview", layout="centered")
 
-# Ленивая загрузка seed.json из data/
-@st.cache_data(show_spinner=False)
-def load_seed(path: str = "data/seed.json") -> dict:
-    p = Path(path)
-    if not p.exists():
-        st.warning("data/seed.json не найден — покажу демо-данные")
-        demo = {
-            "hotels": [
-                {
-                    "id": "h1",
-                    "name": "City Hotel",
-                    "stars": 3,
-                    "city": "Алматы",
-                    "features": ["wifi", "parking"],
-                },
-                {
-                    "id": "h2",
-                    "name": "Beach Resort",
-                    "stars": 4,
-                    "city": "Астана",
-                    "features": ["spa", "pool"],
-                },
-            ],
-            "room_types": [
-                {
-                    "id": "r1",
-                    "hotel_id": "h1",
-                    "name": "Standard",
-                    "capacity": 2,
-                    "beds": ["queen"],
-                    "features": ["ac"],
-                },
-                {
-                    "id": "r2",
-                    "hotel_id": "h2",
-                    "name": "Family",
-                    "capacity": 4,
-                    "beds": ["queen", "twin"],
-                    "features": ["balcony"],
-                },
-            ],
-            "rates": [
-                {
-                    "id": "rp1",
-                    "hotel_id": "h1",
-                    "room_type_id": "r1",
-                    "title": "BAR",
-                    "meal": "RO",
-                    "refundable": True,
-                    "cancel_before_days": 3,
-                },
-                {
-                    "id": "rp2",
-                    "hotel_id": "h2",
-                    "room_type_id": "r2",
-                    "title": "BAR",
-                    "meal": "BB",
-                    "refundable": False,
-                    "cancel_before_days": None,
-                },
-            ],
-            "prices": [
-                {
-                    "id": "p1",
-                    "rate_id": "rp1",
-                    "date": "2025-10-01",
-                    "amount": 25000,
-                    "currency": "KZT",
-                },
-                {
-                    "id": "p2",
-                    "rate_id": "rp2",
-                    "date": "2025-10-01",
-                    "amount": 48000,
-                    "currency": "KZT",
-                },
-            ],
-        }
-        return demo
-    return json.loads(p.read_text(encoding="utf-8"))
+st.title("Hotel Booking — Overview (Lab 1 & 2)")
 
+(hotels, room_types, rates, prices, availability, guests) = load_seed("data/seed.json")
 
-def build_offers(seed: dict) -> tuple[dict, ...]:
-    hotels = {h["id"]: h for h in seed.get("hotels", [])}
-    rooms = [rt for rt in seed.get("room_types", [])]
-    rates = [rp for rp in seed.get("rates", [])]
-    prices = seed.get("prices", [])
+col1, col2, col3 = st.columns(3)
+col1.metric("# Hotels", len(hotels))
+col2.metric("# Room Types", len(room_types))
+col3.metric("# Rates", len(rates))
 
-    # Индекс минимальной цены за ночь по rate_id
-    min_price_by_rate: dict[str, dict] = {}
-    for pr in prices:
-        rid = pr["rate_id"]
-        cur = min_price_by_rate.get(rid)
-        if cur is None or int(pr["amount"]) < cur["amount"]:
-            min_price_by_rate[rid] = {
-                "amount": int(pr["amount"]),
-                "currency": pr["currency"],
-            }
+st.divider()
+price_days = len({p.date for p in prices})
+st.metric("Days in price calendar", price_days)
 
-    offers: list[dict] = []
-    for rate in rates:
-        hotel = hotels.get(rate["hotel_id"]) or {}
-        room = next((r for r in rooms if r["id"] == rate["room_type_id"]), None)
-        mp = min_price_by_rate.get(rate["id"]) or {"amount": 0, "currency": "KZT"}
+st.subheader("Average price by city & stars (rough)")
+hotels_by_id = {h.id: h for h in hotels}
+rates_by_id = {r.id: r for r in rates}
+
+first_price_by_rate = {}
+for p in sorted(prices, key=lambda x: (x.rate_id, x.date)):
+    first_price_by_rate.setdefault(p.rate_id, p.amount)
+
+city_to_amounts = {}
+for rate_id, amt in first_price_by_rate.items():
+    hotel = hotels_by_id[rates_by_id[rate_id].hotel_id]
+    city_to_amounts.setdefault(hotel.city, []).append(amt)
+for city, amts in city_to_amounts.items():
+    st.write(f"**{city}** — {int(mean(amts))} (avg minor units)")
+
+stars_to_amounts = {}
+for rate_id, amt in first_price_by_rate.items():
+    hotel = hotels_by_id[rates_by_id[rate_id].hotel_id]
+    stars_to_amounts.setdefault(hotel.stars, []).append(amt)
+for stars, amts in sorted(stars_to_amounts.items()):
+    st.write(f"⭐ x{stars} — {int(mean(amts))} (avg minor units)")
+
+st.divider()
+st.subheader("Nightly sum demo")
+rate_opt = st.selectbox("Pick a rate", options=[r.id for r in rates])
+checkin = st.text_input("Check-in (YYYY-MM-DD)", value="2025-10-01")
+checkout = st.text_input("Check-out (YYYY-MM-DD)", value="2025-10-05")
+if st.button("Calculate"):
+    total = nightly_sum(prices, checkin, checkout, rate_opt)
+    st.success(f"Total for period: {total} (minor units)")
+
+st.divider()
+st.subheader("Filtered offers demo")
+
+# ==== СОЗДАЁМ OFFERS ====
+room_types_by_id = {rt.id: rt for rt in room_types}
+first_price_by_rate_obj = {}
+for p in sorted(prices, key=lambda x: (x.rate_id, x.date)):
+    first_price_by_rate_obj.setdefault(p.rate_id, p)
+
+offers = []
+for rate in rates:
+    hotel = hotels_by_id[rate.hotel_id]
+    room_type = room_types_by_id[rate.room_type_id]
+    price = first_price_by_rate_obj.get(rate.id)
+    if price:
         offers.append(
-            {
-                "hotel": SimpleNamespace(**hotel),
-                "room": SimpleNamespace(**(room or {})),
-                "rate": SimpleNamespace(**rate),
-                "price_per_night": mp["amount"],
-                "currency": mp["currency"],
-            }
+            Offer(
+                hotel=hotel,
+                room_type=room_type,
+                rate=rate,
+                price_per_night=price.amount,
+                currency=price.currency,
+            )
         )
-    return tuple(offers)
 
+# ==== ФИЛЬТРЫ ====
+city = st.text_input("Enter city", "")
+capacity = st.number_input("Enter number of guests", min_value=1, max_value=10, value=1)
+min_price = st.number_input("Min price", value=0)
+max_price = st.number_input("Max price", value=100000)
+currency = st.text_input("Currency", "KZT")
 
-st.set_page_config(page_title="Hotel Search — Лаба 2", layout="wide")
+filters = []
+if city:
+    filters.append(by_city(city))
+filters.append(by_capacity(capacity))
+filters.append(by_price_range(min_price, max_price, currency))
 
-seed = load_seed()
-offers = build_offers(seed)
+combined_filter = combine_all(*filters)
+filtered_offers = filter_offers(offers, combined_filter)
 
-st.title("Лаба 2: Поиск и фильтры (SPA demo)")
-
-with st.sidebar:
-    st.header("Фильтры")
-    cities = sorted(
-        {o["hotel"].city for o in offers if getattr(o["hotel"], "city", None)}
-    )
-    city = st.selectbox("Город", options=["(любой)"] + cities)
-    guests = st.number_input("Гостей", min_value=1, max_value=8, value=2)
-    all_feats = sorted(
-        {
-            *(f for o in offers for f in getattr(o["hotel"], "features", [])),
-            *(f for o in offers for f in getattr(o["room"], "features", [])),
-        }
-    )
-    feats = st.multiselect("Фичи", options=all_feats)
-    min_amt = st.number_input("Бюджет от, тыйын/коп.", min_value=0, value=0, step=1000)
-    max_amt = st.number_input(
-        "Бюджет до, тыйын/коп.", min_value=0, value=1000000, step=1000
-    )
-    currency = st.selectbox("Валюта", options=sorted({o["currency"] for o in offers}))
-
-preds = []
-if city and city != "(любой)":
-    preds.append(by_city(city))
-preds.append(by_capacity(int(guests)))
-if feats:
-    preds.append(by_features(tuple(feats)))
-preds.append(by_price_range(int(min_amt), int(max_amt), currency))
-
-predicate = combine_all(*preds)
-filtered = filter_offers(offers, predicate)
-
-st.subheader(f"Найдено предложений: {len(filtered)}")
-for o in filtered:
-    st.markdown(
-        f"**{o['hotel'].name}** — {o['room'].name} — {o['rate'].title} | "
-        f"{o['price_per_night']} {o['currency']} / ночь"
+st.subheader(f"Found {len(filtered_offers)} offers")
+for offer in filtered_offers:
+    st.write(
+        f"{offer.hotel.name} — {offer.room_type.name} — "
+        f"{offer.rate.title} | {offer.price_per_night} {offer.currency} / night"
     )
